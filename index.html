@@ -1,0 +1,202 @@
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.9.7/d3.min.js"
+        integrity="sha256-D+2/goqcjnuoryb9A0rifuH0rBYS9hKOzNqG91JhAVc=" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/c3/0.7.3/c3.min.css"
+        integrity="sha256-RSMIOX07BNUXyf71hwmYRrUZ8RmiBxMTpqI0GOAy0GM=" crossorigin="anonymous" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/c3/0.7.3/c3.min.js"
+        integrity="sha256-SyrzeJ/tU+9ZJk4n351h9iJftMf9VdsEx2QQMx8+Pik=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.7.8/angular.min.js"
+        integrity="sha256-23hi0Ag650tclABdGCdMNSjxvikytyQ44vYGo9HyOrU=" crossorigin="anonymous"></script>
+    <style>
+        /* Following removes select feature of text inside cards. */
+        [draggable] {
+            user-select: none;
+        }
+
+        .column {
+            padding: 20px;
+            padding-top: 0px;
+            height: 400px;
+            width: 450px;
+            float: left;
+            border: 2px solid #666666;
+            background-color: #ccc;
+            margin-right: 5px;
+            border-radius: 10px;
+            box-shadow: inset 0 0 3px #000;
+            text-align: center;
+            cursor: move;
+        }
+
+        .column h1 {
+            color: teal;
+            text-shadow: #000 0 1px;
+            box-shadow: 5px;
+            padding: 5px;
+            padding-top: 0px;
+            background: linear-gradient(left center, rgb(0, 0, 0), rgb(79, 79, 79), rgb(21, 21, 21));
+            border-bottom: 1px solid teal;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+        }
+
+        .column.over {
+            border: 2px dashed #000;
+        }
+
+        .button {
+            background-color: teal;
+            /* Green */
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+        }
+    </style>
+</head>​
+
+<body ng-app="testApp" ng-controller="TestCtrl">​
+    <div style="padding:30px">
+        <button class="button" ng-click="enable = !enable">{{ enable ? "false" : "true" }}</button>&nbsp;
+        <button class="button" ng-show="enable" ng-click="save()">Save</button><br>
+    </div>
+    <div id="columns">
+        <div class="column" ng-repeat="i in [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]" draggy="enable">
+            <h1 class="header">Chart {{i}}</h1>
+            <div charty="{{'chart'+i}}">
+            </div>
+        </div>
+    </div>
+    <script>
+        angular.module('testApp', [])
+            .controller('TestCtrl', ['$scope', 'CardOrderSvc', function ($scope, CardOrderSvc) {
+                console.log("TestCtrl");
+                $scope.enable = false;
+                // Need to impleement the following section for db save
+                $scope.save = function () {
+                    $scope.enable = !$scope.enable;
+                    console.log("Save the new card config to db", CardOrderSvc.getCardOrder());
+                }
+            }])
+            .directive('charty', function () {
+                return function link(scope, elem, attrs) {
+                    // can also pass data to charts if needed through directive. Keeping it simple and randomly generating data
+                    var id = attrs.charty;
+                    var data1 = ['data1'];
+                    var data2 = ['data2'];
+                    elem.attr('id', id);
+
+                    for (var i = 0; i < 20; i++) {
+                        data1.push(Math.random(100));
+                        data2.push(Math.random(100));
+                    }
+                    c3.generate({
+                        bindto: "#" + id,
+                        data: {
+                            columns: [
+                                data1,
+                                data2
+                            ]
+                        }
+                    });
+                }
+            })
+            .directive('draggy', ['CardOrderSvc', function (CardOrderSvc) {
+                var dragElements = [];
+                var dragSrcEl = null;
+                // this/e.target is the source node for the following handler fns.
+                function handleDragStart(event) {
+                    // console.log("Drag Started", this);
+                    this.style.opacity = '0.4';
+                    dragSrcEl = this;
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/html', this.innerHTML);
+                }
+
+                function handleDragOver(event) {
+                    // console.log("Drag Over");
+                    event.preventDefault(); // Necessary. Allows us to drop.
+                    event.dataTransfer.dropEffect = 'move';
+                    return false;
+                }
+
+                function handleDragEnter(event) {
+                    // console.log("Drag Enter");
+                    this.classList.add('over');
+                }
+
+                function handleDragLeave(event) {
+                    // console.log("Drag Leave");
+                    this.classList.remove('over'); // this / e.target is previous target element.
+                }
+
+                function handleDrop(event) {
+                    // console.log("Dropped");
+                    event.stopPropagation(); // is this important? 
+                    if (dragSrcEl != this) {
+                        dragSrcEl.innerHTML = this.innerHTML;
+                        this.innerHTML = event.dataTransfer.getData('text/html');
+                    }
+                    CardOrderSvc.switchCard(
+                        dragSrcEl.getElementsByTagName('div')[0].getAttribute('id'),
+                        this.getElementsByTagName('div')[0].getAttribute('id')
+                    );
+                    return false;
+                }
+
+                function handleDragEnd(event) {
+                    // console.log("Drag End");
+                    [].forEach.call(dragElements, function (el) {
+                        el.classList.remove('over');
+                        el.style.opacity = 1;
+                    });
+                }
+
+                function link(scope, element, attrs) {
+                    dragElements.push(element[0]);
+                    scope.$watch(attrs.draggy, function (disabled) {
+                        console.log("Enabled/Disabled", disabled);
+                        element.attr("draggable", disabled);
+                    });
+
+                    element.prop('draggable', true);
+                    // Change the following depending on how your html is structured
+                    CardOrderSvc.registerCard(element[0].getElementsByTagName('div')[0].getAttribute('id'));
+                    element[0].addEventListener('dragstart', handleDragStart, false);
+                    element[0].addEventListener('dragenter', handleDragEnter, false);
+                    element[0].addEventListener('dragover', handleDragOver, false);
+                    element[0].addEventListener('dragleave', handleDragLeave, false);
+                    element[0].addEventListener('drop', handleDrop, false);
+                    element[0].addEventListener('dragend', handleDragEnd, false);
+                }
+                return {
+                    link: link
+                }
+            }])
+            .factory('CardOrderSvc', function () {
+                var cardOrder = []; // an array of card string
+                var idx1, idx2, tmp;
+                return {
+                    registerCard: function (cardId) {
+                        console.log(cardId);
+                        cardOrder.push(cardId)
+                    },
+                    switchCard: function (fromCardId, toCardId) {
+                        idx1 = cardOrder.indexOf(fromCardId);
+                        idx2 = cardOrder.indexOf(toCardId);
+                        cardOrder[idx2] = cardOrder.splice(idx1, 1, cardOrder[idx2])[0];
+                        // tmp = cardOrder[idx2];
+                        // cardOrder[idx2] = cardOrder[idx1];
+                        // cardOrder[idx1] = tmp;
+                        console.log('new card order', cardOrder);
+                    },
+                    getCardOrder: function () {
+                        return cardOrder;
+                    }
+                }
+            })
+    </script>
+</body>
